@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Little but Fierce — Encounter Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <h1>Little but Fierce</h1>
+    <p class="subtitle">Encounter Tracker</p>
+  </header>
+
+  <main id="app">
+
+    <!-- ═══════════════════════════════════════════════════════════
+         BUILDER VIEW
+    ═══════════════════════════════════════════════════════════ -->
+    <section id="view-builder" class="view active">
+
+      <h2>Encounter Creator</h2>
+
+      <!-- Party Config -->
+      <div class="panel party-config">
+        <h3>Party</h3>
+        <div class="party-inputs">
+          <label>
+            <span>Heroes</span>
+            <input type="number" id="party-size" min="1" max="10" value="4">
+          </label>
+          <label>
+            <span>Average Level</span>
+            <input type="number" id="party-level" min="1" max="20" value="2">
+          </label>
+          <div class="tpl-display">
+            Total Party Level: <strong id="tpl-value">8</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Difficulty Budget -->
+      <div class="panel difficulty-panel">
+        <h3>Difficulty Budget</h3>
+        <div class="difficulty-tiers" id="difficulty-tiers">
+          <!-- rendered by JS -->
+        </div>
+        <div class="budget-bar-wrap">
+          <div class="budget-bar" id="budget-bar">
+            <div class="budget-fill" id="budget-fill"></div>
+          </div>
+          <div class="budget-label" id="budget-label">0 XP — no enemies yet</div>
+        </div>
+      </div>
+
+      <!-- Enemy Search -->
+      <div class="panel search-panel">
+        <h3>Add Enemies</h3>
+        <div class="search-controls">
+          <div class="search-input-wrap">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="search-input" placeholder="Search enemies..." autocomplete="off">
+          </div>
+          <div class="filter-row">
+            <select id="filter-type">
+              <option value="">All Types</option>
+              <option value="Animal">Animal</option>
+              <option value="Construct">Construct</option>
+              <option value="Lost">Lost</option>
+              <option value="Marvel">Marvel</option>
+              <option value="Person">Person</option>
+              <option value="Plant">Plant</option>
+            </select>
+            <select id="filter-dl">
+              <option value="">All DLs</option>
+            </select>
+          </div>
+        </div>
+        <div id="search-results" class="search-results">
+          <!-- rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Roster -->
+      <div class="panel roster-panel">
+        <h3>Encounter Roster</h3>
+        <div id="roster-list" class="roster-list">
+          <p class="empty-msg">No enemies added yet.</p>
+        </div>
+        <div id="roster-totals" class="roster-totals hidden">
+          <span id="total-dl">Total DL: 0</span>
+          <span class="sep">|</span>
+          <span id="total-xp">Total XP: 0</span>
+        </div>
+        <button id="btn-start" class="btn btn-primary btn-large" disabled>
+          Start Encounter
+        </button>
+      </div>
+
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         ENCOUNTER VIEW
+    ═══════════════════════════════════════════════════════════ -->
+    <section id="view-encounter" class="view">
+
+      <div class="encounter-header">
+        <div class="encounter-title">
+          <h2>&#9876; Active Encounter</h2>
+          <div class="encounter-xp-summary" id="encounter-xp-summary"></div>
+        </div>
+        <button id="btn-end" class="btn btn-danger">End Encounter</button>
+      </div>
+
+      <div id="encounter-enemies" class="encounter-enemies">
+        <!-- rendered by JS -->
+      </div>
+
+      <div class="encounter-footer" id="encounter-footer">
+        <span id="xp-earned-display"></span>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="data/enemies.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
