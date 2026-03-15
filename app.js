@@ -2,6 +2,179 @@
 // Little but Fierce — Encounter Tracker
 // ═══════════════════════════════════════════════════════════════════
 
+// ── Status effects ────────────────────────────────────────────────────
+const EFFECTS = [
+  { id: 'asleep',      label: 'Asleep',      color: '#7a5a9a' },
+  { id: 'blind',       label: 'Blind',       color: '#5a5a5a' },
+  { id: 'charmed',     label: 'Charmed',     color: '#c06090' },
+  { id: 'deaf',        label: 'Deaf',        color: '#8a6a3a' },
+  { id: 'fallen-down', label: 'Fallen Down', color: '#6a5a3a' },
+  { id: 'scared',      label: 'Scared',      color: '#c07020' },
+  { id: 'stopped',     label: 'Stopped',     color: '#8b1a1a' },
+  { id: 'poisoned',    label: 'Poisoned',    color: '#3a7a3a' },
+  { id: 'on-fire',     label: 'On Fire',     color: '#c04010' },
+];
+
+// ── Dice roller constants & state ────────────────────────────────────
+const DICE_SIDES = [4, 6, 8, 10, 12, 20];
+
+const rollState = {
+  pool: { 4: 0, 6: 0, 8: 0, 10: 0, 12: 0, 20: 0 },
+  // current: { label, sections:[{ label, dice:[{die,value,shown}], bonus, totalShown }] }
+  current:    null,
+  animating:  false
+};
+
+function rollDie(sides) {
+  return Math.floor(Math.random() * sides) + 1;
+}
+
+function parseDamage(str) {
+  if (!str) return null;
+  str = str.trim();
+  const m = str.match(/^(\d+)d(\d+)([+-]\d+)?$/i);
+  if (m) return { count: parseInt(m[1]), die: parseInt(m[2]), bonus: m[3] ? parseInt(m[3]) : 0 };
+  const flat = parseInt(str);
+  return isNaN(flat) ? null : { count: 0, die: 0, bonus: flat };
+}
+
+function parseHitBonus(str) {
+  const n = parseInt(str || '0');
+  return isNaN(n) ? 0 : n;
+}
+
+// sectionDefs: [{ label, dice: [sides,...], bonus }]
+function startRoll(sectionDefs, label) {
+  if (rollState.animating) return;
+  rollState.current = {
+    label,
+    sections: sectionDefs.map(s => ({
+      label:      s.label || null,
+      bonus:      s.bonus || 0,
+      dice:       (s.dice || []).map(d => ({ die: d, value: rollDie(d), shown: false })),
+      totalShown: false
+    }))
+  };
+  rollState.animating = true;
+
+  // Flatten animation steps: reveal each die then show its section total
+  const steps = [];
+  rollState.current.sections.forEach((sec, si) => {
+    sec.dice.forEach((_, di) => steps.push({ si, di, type: 'die' }));
+    steps.push({ si, type: 'total' });
+  });
+
+  function advance(idx) {
+    if (idx >= steps.length) { rollState.animating = false; renderDiceRoller(); return; }
+    const step = steps[idx];
+    if (step.type === 'die') rollState.current.sections[step.si].dice[step.di].shown = true;
+    else                     rollState.current.sections[step.si].totalShown = true;
+    renderDiceRoller();
+    setTimeout(() => advance(idx + 1), 500);
+  }
+  renderDiceRoller();
+  setTimeout(() => advance(0), 150);
+}
+
+function renderDiceRoller() {
+  const el = document.getElementById('dice-roller');
+  if (!el) return;
+
+  const hasPool = DICE_SIDES.some(d => (rollState.pool[d] || 0) > 0);
+
+  // ── Die tray ──
+  const trayHtml = DICE_SIDES.map(d => {
+    const qty = rollState.pool[d] || 0;
+    return `
+      <div class="die-control">
+        <button class="die-adj-btn" data-action="die-dec" data-die="${d}" ${qty === 0 ? 'disabled' : ''}>&#8722;</button>
+        <div class="die-face d${d}">
+          <span class="die-face-label">d${d}</span>
+          ${qty > 0 ? `<span class="die-face-qty">${qty}</span>` : ''}
+        </div>
+        <button class="die-adj-btn" data-action="die-inc" data-die="${d}">&#43;</button>
+      </div>`;
+  }).join('');
+
+  // ── Roll results ──
+  let resultsHtml = '';
+  const c = rollState.current;
+  if (c) {
+    const sectionsHtml = c.sections.map(sec => {
+      const shown = sec.dice.filter(d => d.shown);
+      if (shown.length === 0 && !sec.totalShown) return '';
+
+      const diceChips = shown.map(d =>
+        `<span class="result-die d${d.die}">${d.value}</span>`
+      ).join('');
+
+      const rawTotal = sec.dice.reduce((s, d) => s + d.value, 0) + sec.bonus;
+      // bonus display: if there are dice, show "+ n" or "− n"; if flat-only, just the number
+      const bonusStr = sec.bonus === 0 ? ''
+        : shown.length === 0 ? String(sec.bonus)
+        : sec.bonus > 0 ? `<span class="roll-bonus">+${sec.bonus}</span>`
+        : `<span class="roll-bonus">&#8722;${Math.abs(sec.bonus)}</span>`;
+
+      return `
+        <div class="roll-section">
+          ${sec.label ? `<span class="roll-section-label">${escHtml(sec.label)}</span>` : ''}
+          <div class="roll-dice-row">
+            ${diceChips}${bonusStr}
+            ${sec.totalShown ? `<span class="roll-equals">=</span><span class="roll-total">${rawTotal}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    resultsHtml = `
+      <div class="roll-results-area">
+        <div class="roll-results-label">${escHtml(c.label)}</div>
+        ${sectionsHtml}
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="dice-roller-inner">
+      <div class="dice-roller-top">
+        <span class="dice-roller-title">&#127922; Dice Roller</span>
+        <div class="dice-roller-btns">
+          <button class="btn btn-primary btn-sm" data-action="roll-pool"
+            ${!hasPool || rollState.animating ? 'disabled' : ''}>Roll!</button>
+          <button class="btn btn-sm dice-clear-btn" data-action="clear-roller">Clear</button>
+        </div>
+      </div>
+      <div class="dice-tray">${trayHtml}</div>
+      ${resultsHtml}
+    </div>`;
+}
+
+function onDiceRollerClick(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const action = btn.dataset.action;
+
+  if (action === 'die-inc') {
+    rollState.pool[parseInt(btn.dataset.die)] = (rollState.pool[parseInt(btn.dataset.die)] || 0) + 1;
+    renderDiceRoller(); return;
+  }
+  if (action === 'die-dec') {
+    rollState.pool[parseInt(btn.dataset.die)] = Math.max(0, (rollState.pool[parseInt(btn.dataset.die)] || 0) - 1);
+    renderDiceRoller(); return;
+  }
+  if (action === 'roll-pool') {
+    if (rollState.animating) return;
+    const dice = [];
+    DICE_SIDES.forEach(d => { for (let i = 0; i < (rollState.pool[d] || 0); i++) dice.push(d); });
+    if (dice.length) startRoll([{ label: null, dice, bonus: 0 }], 'Manual Roll');
+    return;
+  }
+  if (action === 'clear-roller') {
+    rollState.current = null;
+    rollState.animating = false;
+    DICE_SIDES.forEach(d => { rollState.pool[d] = 0; });
+    renderDiceRoller(); return;
+  }
+}
+
 // ── XP table and difficulty multipliers ─────────────────────────────
 const DL_TO_XP = {
   0: 2, 1: 3, 2: 5, 3: 8, 4: 13, 5: 22, 6: 30, 7: 40,
@@ -270,10 +443,65 @@ function renderEnemyCard(inst) {
   const btnLabel  = inst.defeated ? '&#10003; Defeated' : 'Mark Defeated';
   const disabled  = inst.defeated ? 'disabled' : '';
 
+  // ── Stat block ──
+  const enemy = enemyById(inst.enemyId);
+  const statsHtml = enemy ? `
+    <div class="stat-block">
+      <div class="stat-block-core">
+        <span class="stat-item"><abbr title="Strength">STR</abbr> ${enemy.str >= 0 ? '+' : ''}${enemy.str}</span>
+        <span class="stat-item"><abbr title="Speed">SPD</abbr> ${enemy.spd >= 0 ? '+' : ''}${enemy.spd}</span>
+        <span class="stat-item"><abbr title="Smarts">SMT</abbr> ${enemy.smt >= 0 ? '+' : ''}${enemy.smt}</span>
+        <span class="stat-item"><abbr title="Smiles">SML</abbr> ${enemy.sml >= 0 ? '+' : ''}${enemy.sml}</span>
+        <span class="stat-divider"></span>
+        <span class="stat-item">Move <strong>${escHtml(String(enemy.move))}</strong></span>
+        <span class="stat-item">Awareness <strong>${enemy.awareness}</strong></span>
+        <span class="stat-item">Defence <strong>${enemy.defence}</strong></span>
+      </div>
+      ${enemy.attacks.length ? `
+        <div class="stat-section">
+          <span class="stat-label">Attacks</span>
+          <ul class="stat-list">
+            ${enemy.attacks.map(a => `<li>
+                <span class="attack-detail">
+                  <strong>${escHtml(a.name)}</strong> &mdash; ${escHtml(a.range)} &mdash; Roll ${escHtml(a.roll)} &mdash; ${escHtml(a.damage)}
+                </span>
+                <button class="btn-attack-roll" data-action="attack-roll"
+                  data-inst="${inst.id}"
+                  data-roll="${escHtml(a.roll)}"
+                  data-damage="${escHtml(a.damage)}"
+                  data-attack-name="${escHtml(a.name)}"
+                  ${inst.defeated ? 'disabled' : ''}>&#9876; Roll</button>
+              </li>`).join('')}
+          </ul>
+        </div>` : ''}
+      ${enemy.abilities.length ? `
+        <div class="stat-section">
+          <span class="stat-label">Abilities</span>
+          <ul class="stat-list">
+            ${enemy.abilities.map(a => `<li>${escHtml(a)}</li>`).join('')}
+          </ul>
+        </div>` : ''}
+    </div>` : '';
+
+  const statsToggleLabel = inst.statsOpen ? '&#9650; Stats' : '&#9660; Stats';
+
+  // ── Effects ──
+  const activeEffects = inst.effects || [];
+  const effectsHtml = EFFECTS.map(ef => {
+    const active = activeEffects.includes(ef.id);
+    const style  = active ? `background:${ef.color};color:#fff;border-color:${ef.color};` : '';
+    return `<button class="effect-chip${active ? ' active' : ''}" style="${style}"
+      data-inst="${inst.id}" data-action="toggle-effect" data-effect="${ef.id}"
+      ${inst.defeated ? 'disabled' : ''}>${escHtml(ef.label)}</button>`;
+  }).join('');
+
   return `
     <div class="${cardClass}" id="card-${inst.id}">
       <div class="enemy-card-header">
-        <span class="enemy-card-name">${escHtml(inst.name)}</span>
+        <div class="enemy-card-name-row">
+          <span class="enemy-card-name">${escHtml(inst.name)}</span>
+          <button class="btn-stats-toggle" data-inst="${inst.id}" data-action="toggle-stats">${statsToggleLabel}</button>
+        </div>
         <div class="enemy-card-badges">
           <span class="tag tag-type-${escHtml(inst.type)}">${escHtml(inst.type)}</span>
           <span class="tag tag-dl">DL ${inst.dl}</span>
@@ -283,6 +511,9 @@ function renderEnemyCard(inst) {
           </button>
         </div>
       </div>
+
+      ${inst.statsOpen ? statsHtml : ''}
+
       <div class="hp-bar-wrap">
         <div class="hp-bar">
           <div class="${fillClass}" style="width: ${pct}%"></div>
@@ -303,6 +534,18 @@ function renderEnemyCard(inst) {
           <button class="btn-apply-dmg" data-inst="${inst.id}" data-action="apply-dmg" ${disabled}>Apply</button>
           <button class="btn-apply-heal" data-inst="${inst.id}" data-action="apply-heal" ${disabled}>Heal</button>
         </div>
+      </div>
+
+      <div class="effects-row">
+        <span class="effects-label">Effects:</span>
+        ${effectsHtml}
+      </div>
+
+      <div class="notes-row">
+        <label class="notes-label" for="notes-${inst.id}">Notes</label>
+        <textarea id="notes-${inst.id}" class="notes-input" data-inst="${inst.id}"
+          placeholder="Positioning, conditions, reminders..."
+          rows="2">${escHtml(inst.notes || '')}</textarea>
       </div>
     </div>
   `;
@@ -415,7 +658,10 @@ function onStartEncounter() {
         xp: enemy.xp,
         maxHp: enemy.hp,
         currentHp: enemy.hp,
-        defeated: false
+        defeated: false,
+        statsOpen: false,
+        effects: [],
+        notes: ''
       });
     }
   });
@@ -424,6 +670,7 @@ function onStartEncounter() {
   saveState();
   showView('encounter');
   renderEncounter();
+  renderDiceRoller();
 }
 
 function onEndEncounter() {
@@ -435,6 +682,54 @@ function onEndEncounter() {
 }
 
 function onEncounterClick(e) {
+  // Toggle stat block
+  const statsBtn = e.target.closest('[data-action="toggle-stats"]');
+  if (statsBtn) {
+    const instId = statsBtn.dataset.inst;
+    const inst = state.encounter.enemies.find(en => en.id === instId);
+    if (inst) {
+      inst.statsOpen = !inst.statsOpen;
+      saveState();
+      renderEncounter();
+    }
+    return;
+  }
+
+  // Enemy attack roll
+  const attackBtn = e.target.closest('[data-action="attack-roll"]');
+  if (attackBtn) {
+    const hitBonus = parseHitBonus(attackBtn.dataset.roll);
+    const dmg      = parseDamage(attackBtn.dataset.damage);
+    const sections = [{ label: 'To-Hit (d10)', dice: [10], bonus: hitBonus }];
+    if (dmg) {
+      if (dmg.die > 0) {
+        sections.push({ label: 'Damage', dice: Array(dmg.count).fill(dmg.die), bonus: dmg.bonus });
+      } else {
+        sections.push({ label: 'Damage', dice: [], bonus: dmg.bonus });
+      }
+    }
+    startRoll(sections, attackBtn.dataset.attackName);
+    document.getElementById('dice-roller')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
+
+  // Toggle status effect
+  const effectBtn = e.target.closest('[data-action="toggle-effect"]');
+  if (effectBtn) {
+    const instId   = effectBtn.dataset.inst;
+    const effectId = effectBtn.dataset.effect;
+    const inst = state.encounter.enemies.find(en => en.id === instId);
+    if (inst) {
+      if (!inst.effects) inst.effects = [];
+      const idx = inst.effects.indexOf(effectId);
+      if (idx === -1) inst.effects.push(effectId);
+      else inst.effects.splice(idx, 1);
+      saveState();
+      renderEncounter();
+    }
+    return;
+  }
+
   // Toggle defeat button
   const toggleBtn = e.target.closest('[data-action="toggle-defeat"]');
   if (toggleBtn) {
@@ -488,6 +783,18 @@ function applyHpChange(instId, delta) {
   renderEncounter();
 }
 
+// Notes textarea — save without re-render so focus is preserved
+function onEncounterInput(e) {
+  const textarea = e.target.closest('.notes-input');
+  if (!textarea || !state.encounter) return;
+  const instId = textarea.dataset.inst;
+  const inst = state.encounter.enemies.find(en => en.id === instId);
+  if (inst) {
+    inst.notes = textarea.value;
+    saveState();
+  }
+}
+
 // Enter key in damage input applies damage
 function onEncounterKeydown(e) {
   if (e.key !== 'Enter') return;
@@ -535,12 +842,17 @@ function init() {
 
   // Encounter controls (event delegation)
   document.getElementById('encounter-enemies').addEventListener('click', onEncounterClick);
+  document.getElementById('encounter-enemies').addEventListener('input', onEncounterInput);
   document.getElementById('encounter-enemies').addEventListener('keydown', onEncounterKeydown);
+
+  // Dice roller
+  document.getElementById('dice-roller').addEventListener('click', onDiceRollerClick);
 
   // Restore correct view
   if (state.view === 'encounter' && state.encounter) {
     showView('encounter');
     renderEncounter();
+    renderDiceRoller();
   } else {
     state.view = 'builder';
     showView('builder');

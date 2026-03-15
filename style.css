@@ -569,11 +569,9 @@ header .subtitle {
 
 .enemy-card-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
+  flex-direction: column;
+  gap: 0.4rem;
   margin-bottom: 0.6rem;
-  flex-wrap: wrap;
 }
 
 .enemy-card-name {
@@ -744,6 +742,400 @@ header .subtitle {
 }
 
 .btn-apply-heal:hover { background: #206a20; }
+
+/* ── Stat block toggle button ── */
+.enemy-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.btn-stats-toggle {
+  padding: 0.15rem 0.55rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  border: 1px solid var(--brown-light);
+  border-radius: var(--radius);
+  background: var(--parchment-dark);
+  color: var(--ink-light);
+  cursor: pointer;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.btn-stats-toggle:hover { background: var(--parchment-deep); }
+
+/* ── Stat block ── */
+.stat-block {
+  background: #fffdf0;
+  border: 1px solid var(--parchment-deep);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  margin: 0.5rem 0 0.6rem;
+  font-size: 0.85rem;
+}
+
+.stat-block-core {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--parchment-deep);
+}
+
+.stat-item {
+  color: var(--ink-light);
+  white-space: nowrap;
+}
+
+.stat-item abbr {
+  text-decoration: none;
+  font-weight: bold;
+  color: var(--brown);
+}
+
+.stat-divider {
+  width: 1px;
+  background: var(--parchment-deep);
+  align-self: stretch;
+  margin: 0 0.3rem;
+}
+
+.stat-section {
+  margin-top: 0.5rem;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.75rem;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--brown);
+  margin-bottom: 0.25rem;
+}
+
+.stat-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.stat-list li {
+  color: var(--ink);
+  padding-left: 0.9rem;
+  position: relative;
+  line-height: 1.4;
+}
+
+.stat-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--brown-light);
+}
+
+/* ── Effects row ── */
+.effects-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--parchment-deep);
+}
+
+.effects-label {
+  font-size: 0.75rem;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--ink-light);
+  margin-right: 0.1rem;
+  white-space: nowrap;
+}
+
+.effect-chip {
+  padding: 0.18rem 0.55rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--brown-light);
+  background: var(--parchment-dark);
+  color: var(--ink-light);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.effect-chip:hover:not(:disabled) { filter: brightness(1.1); }
+.effect-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Notes row ── */
+.notes-row {
+  margin-top: 0.6rem;
+}
+
+.notes-label {
+  display: block;
+  font-size: 0.75rem;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--ink-light);
+  margin-bottom: 0.25rem;
+}
+
+.notes-input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--parchment-deep);
+  border-radius: var(--radius);
+  background: #fffdf5;
+  color: var(--ink);
+  font-family: 'Georgia', serif;
+  font-size: 0.85rem;
+  resize: vertical;
+  min-height: 52px;
+  line-height: 1.4;
+}
+
+.notes-input:focus {
+  outline: 2px solid var(--gold);
+  border-color: var(--gold);
+}
+
+.enemy-card.defeated .notes-input {
+  background: #f0ece4;
+  color: #9a8a7a;
+}
+
+/* ── Dice Roller Panel ── */
+.dice-roller { margin-bottom: 1rem; }
+
+.dice-roller-inner { display: flex; flex-direction: column; gap: 0.7rem; }
+
+.dice-roller-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dice-roller-title {
+  font-size: 1rem;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--brown);
+  font-weight: bold;
+}
+
+.dice-roller-btns {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.btn-sm {
+  padding: 0.3rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+.dice-clear-btn {
+  background: var(--parchment-dark);
+  border: 1px solid var(--brown-light);
+  color: var(--ink-light);
+}
+.dice-clear-btn:hover { background: var(--parchment-deep); }
+
+/* Die tray */
+.dice-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+}
+
+.die-control {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.die-adj-btn {
+  width: 22px; height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--brown-light);
+  background: var(--parchment-dark);
+  color: var(--brown);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.die-adj-btn:hover:not(:disabled) { background: var(--parchment-deep); }
+.die-adj-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.die-face {
+  width: 46px; height: 46px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  position: relative;
+  user-select: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+}
+.die-face.d4  { background: #b8900e; color: #fff8e0; border-radius: 0;
+                clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+                justify-content: flex-end; padding-bottom: 9px;
+                filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
+.die-face.d6  { background: #2560a8; color: #e8f0ff; }
+.die-face.d8  { background: #1e7a44; color: #e0f8ea; border-radius: 0;
+                clip-path: polygon(50% 4%, 96% 50%, 50% 96%, 4% 50%);
+                filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
+.die-face.d10 { background: #c05018; color: #fff0e0; border-radius: 0;
+                clip-path: polygon(50% 4%, 96% 50%, 50% 96%, 4% 50%);
+                filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
+.die-face.d12 { background: #6020a0; color: #f0e0ff; border-radius: 50%; }
+.die-face.d20 { background: #a01010; color: #ffe0e0; border-radius: 50%; }
+
+.die-face-label {
+  font-size: 0.82rem;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.die-face-qty {
+  font-size: 1rem;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* Roll results */
+.roll-results-area {
+  background: #fffdf0;
+  border: 1px solid var(--parchment-deep);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.roll-results-label {
+  font-size: 0.78rem;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  color: var(--brown);
+  font-weight: bold;
+}
+
+.roll-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.roll-section-label {
+  font-size: 0.72rem;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--ink-light);
+  min-width: 80px;
+}
+
+.roll-dice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.result-die {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: 6px;
+  font-size: 1.05rem;
+  font-weight: bold;
+  color: white;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
+  animation: diceAppear 0.2s ease-out;
+}
+.result-die.d4  { background: #b8900e; border-radius: 0;
+                  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+                  justify-content: flex-end; padding-bottom: 6px; }
+.result-die.d6  { background: #2560a8; }
+.result-die.d8  { background: #1e7a44; border-radius: 0;
+                  clip-path: polygon(50% 4%, 96% 50%, 50% 96%, 4% 50%); }
+.result-die.d10 { background: #c05018; border-radius: 0;
+                  clip-path: polygon(50% 4%, 96% 50%, 50% 96%, 4% 50%); }
+.result-die.d12 { background: #6020a0; border-radius: 50%; }
+.result-die.d20 { background: #a01010; border-radius: 50%; }
+
+.roll-bonus {
+  font-size: 0.9rem;
+  color: var(--ink-light);
+  font-weight: bold;
+}
+
+.roll-equals {
+  font-size: 1rem;
+  color: var(--ink-light);
+  margin: 0 0.1rem;
+}
+
+.roll-total {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--brown);
+  color: var(--parchment);
+  font-size: 1.1rem;
+  font-weight: bold;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  animation: diceAppear 0.2s ease-out;
+  padding: 0 0.3rem;
+}
+
+@keyframes diceAppear {
+  from { transform: scale(0.6) rotate(-15deg); opacity: 0; }
+  to   { transform: scale(1)   rotate(0deg);  opacity: 1; }
+}
+
+/* Attack roll button in stat block */
+.btn-attack-roll {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  border: 1px solid var(--brown-light);
+  border-radius: var(--radius);
+  background: var(--parchment-dark);
+  color: var(--brown);
+  cursor: pointer;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.btn-attack-roll:hover:not(:disabled) { background: var(--parchment-deep); }
+.btn-attack-roll:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.attack-detail { vertical-align: middle; }
 
 /* ── Encounter Footer ── */
 .encounter-footer {
