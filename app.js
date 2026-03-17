@@ -20,9 +20,11 @@ const DICE_SIDES = [4, 6, 8, 10, 12, 20];
 
 const rollState = {
   pool: { 4: 0, 6: 0, 8: 0, 10: 0, 12: 0, 20: 0 },
-  // current: { label, sections:[{ label, dice:[{die,value,shown}], bonus, totalShown }] }
-  current:    null,
-  animating:  false
+  // current: { label, sections:[{ label, dice:[{die,value,shown,spinning,spinValue}], bonus, totalShown }] }
+  current:       null,
+  animating:     false,
+  spinInterval:  null,
+  pendingDamage: null   // { dmg, attackName } for two-phase attack rolls
 };
 
 function rollDie(sides) {
@@ -46,34 +48,57 @@ function parseHitBonus(str) {
 // sectionDefs: [{ label, dice: [sides,...], bonus }]
 function startRoll(sectionDefs, label) {
   if (rollState.animating) return;
+
+  // Clear any existing spin interval
+  if (rollState.spinInterval) { clearInterval(rollState.spinInterval); rollState.spinInterval = null; }
+
   rollState.current = {
     label,
     sections: sectionDefs.map(s => ({
       label:      s.label || null,
       bonus:      s.bonus || 0,
-      dice:       (s.dice || []).map(d => ({ die: d, value: rollDie(d), shown: false })),
+      dice:       (s.dice || []).map(d => ({
+        die: d, value: rollDie(d), shown: true, spinning: true, spinValue: rollDie(d)
+      })),
       totalShown: false
     }))
   };
   rollState.animating = true;
 
-  // Flatten animation steps: reveal each die then show its section total
+  // Spin interval: flicker random values for all spinning dice
+  rollState.spinInterval = setInterval(() => {
+    if (!rollState.current) return;
+    rollState.current.sections.forEach(sec => {
+      sec.dice.forEach(d => { if (d.spinning) d.spinValue = rollDie(d.die); });
+    });
+    renderDiceRoller();
+  }, 80);
+
+  // Steps: lock each die one by one, then reveal each section total
   const steps = [];
   rollState.current.sections.forEach((sec, si) => {
-    sec.dice.forEach((_, di) => steps.push({ si, di, type: 'die' }));
+    sec.dice.forEach((_, di) => steps.push({ si, di, type: 'die-lock' }));
     steps.push({ si, type: 'total' });
   });
 
   function advance(idx) {
-    if (idx >= steps.length) { rollState.animating = false; renderDiceRoller(); return; }
+    if (idx >= steps.length) {
+      rollState.animating = false;
+      if (rollState.spinInterval) { clearInterval(rollState.spinInterval); rollState.spinInterval = null; }
+      renderDiceRoller();
+      return;
+    }
     const step = steps[idx];
-    if (step.type === 'die') rollState.current.sections[step.si].dice[step.di].shown = true;
-    else                     rollState.current.sections[step.si].totalShown = true;
+    if (step.type === 'die-lock') {
+      rollState.current.sections[step.si].dice[step.di].spinning = false;
+    } else {
+      rollState.current.sections[step.si].totalShown = true;
+    }
     renderDiceRoller();
-    setTimeout(() => advance(idx + 1), 500);
+    setTimeout(() => advance(idx + 1), step.type === 'die-lock' ? 350 : 250);
   }
   renderDiceRoller();
-  setTimeout(() => advance(0), 150);
+  setTimeout(() => advance(0), 600); // spin all dice for 600ms before first lock-in
 }
 
 function renderDiceRoller() {
@@ -101,17 +126,19 @@ function renderDiceRoller() {
   const c = rollState.current;
   if (c) {
     const sectionsHtml = c.sections.map(sec => {
-      const shown = sec.dice.filter(d => d.shown);
-      if (shown.length === 0 && !sec.totalShown) return '';
+      const visibleDice = sec.dice.filter(d => d.shown || d.spinning);
+      if (visibleDice.length === 0 && !sec.totalShown) return '';
 
-      const diceChips = shown.map(d =>
-        `<span class="result-die d${d.die}">${d.value}</span>`
-      ).join('');
+      const diceChips = visibleDice.map(d => {
+        const displayVal = d.spinning ? d.spinValue : d.value;
+        const spinClass  = d.spinning ? ' spinning' : '';
+        return `<span class="result-die d${d.die}${spinClass}">${displayVal}</span>`;
+      }).join('');
 
       const rawTotal = sec.dice.reduce((s, d) => s + d.value, 0) + sec.bonus;
-      // bonus display: if there are dice, show "+ n" or "− n"; if flat-only, just the number
+      const lockedDice = sec.dice.filter(d => !d.spinning);
       const bonusStr = sec.bonus === 0 ? ''
-        : shown.length === 0 ? String(sec.bonus)
+        : lockedDice.length === 0 ? String(sec.bonus)
         : sec.bonus > 0 ? `<span class="roll-bonus">+${sec.bonus}</span>`
         : `<span class="roll-bonus">&#8722;${Math.abs(sec.bonus)}</span>`;
 
@@ -125,10 +152,12 @@ function renderDiceRoller() {
         </div>`;
     }).join('');
 
+    const canRollDamage = rollState.pendingDamage && !rollState.animating;
     resultsHtml = `
       <div class="roll-results-area">
         <div class="roll-results-label">${escHtml(c.label)}</div>
         ${sectionsHtml}
+        ${canRollDamage ? `<button class="btn btn-primary btn-sm btn-roll-damage" data-action="roll-damage">&#9876; Roll Damage</button>` : ''}
       </div>`;
   }
 
@@ -167,9 +196,21 @@ function onDiceRollerClick(e) {
     if (dice.length) startRoll([{ label: null, dice, bonus: 0 }], 'Manual Roll');
     return;
   }
+  if (action === 'roll-damage') {
+    if (rollState.animating || !rollState.pendingDamage) return;
+    const { dmg, attackName } = rollState.pendingDamage;
+    rollState.pendingDamage = null;
+    const damageSection = dmg.die > 0
+      ? { label: 'Damage', dice: Array(dmg.count).fill(dmg.die), bonus: dmg.bonus }
+      : { label: 'Damage', dice: [], bonus: dmg.bonus };
+    startRoll([damageSection], attackName + ' — Damage');
+    return;
+  }
   if (action === 'clear-roller') {
+    if (rollState.spinInterval) { clearInterval(rollState.spinInterval); rollState.spinInterval = null; }
     rollState.current = null;
     rollState.animating = false;
+    rollState.pendingDamage = null;
     DICE_SIDES.forEach(d => { rollState.pool[d] = 0; });
     renderDiceRoller(); return;
   }
@@ -484,6 +525,7 @@ function renderEnemyCard(inst) {
     </div>` : '';
 
   const statsToggleLabel = inst.statsOpen ? '&#9650; Stats' : '&#9660; Stats';
+  const statsToggleTitle = inst.statsOpen ? 'Collapse stats' : 'Expand stats';
 
   // ── Effects ──
   const activeEffects = inst.effects || [];
@@ -500,15 +542,16 @@ function renderEnemyCard(inst) {
       <div class="enemy-card-header">
         <div class="enemy-card-name-row">
           <span class="enemy-card-name">${escHtml(inst.name)}</span>
-          <button class="btn-stats-toggle" data-inst="${inst.id}" data-action="toggle-stats">${statsToggleLabel}</button>
-        </div>
-        <div class="enemy-card-badges">
           <span class="tag tag-type-${escHtml(inst.type)}">${escHtml(inst.type)}</span>
           <span class="tag tag-dl">DL ${inst.dl}</span>
           <span class="tag tag-xp">${inst.xp} XP</span>
+        </div>
+        <div class="enemy-card-actions">
           <button class="${btnClass}" data-inst="${inst.id}" data-action="toggle-defeat">
             ${btnLabel}
           </button>
+          <button class="btn-stats-toggle" data-inst="${inst.id}" data-action="toggle-stats"
+            title="${statsToggleTitle}">${statsToggleLabel}</button>
         </div>
       </div>
 
@@ -659,7 +702,7 @@ function onStartEncounter() {
         maxHp: enemy.hp,
         currentHp: enemy.hp,
         defeated: false,
-        statsOpen: false,
+        statsOpen: true,
         effects: [],
         notes: ''
       });
@@ -695,20 +738,14 @@ function onEncounterClick(e) {
     return;
   }
 
-  // Enemy attack roll
+  // Enemy attack roll — to-hit only; damage deferred to "Roll Damage" button
   const attackBtn = e.target.closest('[data-action="attack-roll"]');
   if (attackBtn) {
     const hitBonus = parseHitBonus(attackBtn.dataset.roll);
     const dmg      = parseDamage(attackBtn.dataset.damage);
-    const sections = [{ label: 'To-Hit (d10)', dice: [10], bonus: hitBonus }];
-    if (dmg) {
-      if (dmg.die > 0) {
-        sections.push({ label: 'Damage', dice: Array(dmg.count).fill(dmg.die), bonus: dmg.bonus });
-      } else {
-        sections.push({ label: 'Damage', dice: [], bonus: dmg.bonus });
-      }
-    }
-    startRoll(sections, attackBtn.dataset.attackName);
+    const attackName = attackBtn.dataset.attackName;
+    rollState.pendingDamage = dmg ? { dmg, attackName } : null;
+    startRoll([{ label: 'To-Hit (d10)', dice: [10], bonus: hitBonus }], attackName + ' — To Hit');
     document.getElementById('dice-roller')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     return;
   }
