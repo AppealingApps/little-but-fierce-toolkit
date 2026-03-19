@@ -57,21 +57,22 @@ function startRoll(sectionDefs, label) {
     sections: sectionDefs.map(s => ({
       label:      s.label || null,
       bonus:      s.bonus || 0,
-      dice:       (s.dice || []).map(d => ({
-        die: d, value: rollDie(d), shown: true, spinning: true, spinValue: rollDie(d)
+      dice:       (s.dice || []).map((d, i) => ({
+        die: d, value: (s.preRolled && s.preRolled[i] !== undefined) ? s.preRolled[i] : rollDie(d),
+        shown: true, spinning: true, spinValue: rollDie(d)
       })),
       totalShown: false
     }))
   };
   rollState.animating = true;
 
-  // Spin interval: flicker random values for all spinning dice
+  // Spin interval: update only the text of spinning dice — no DOM rebuild so background stays solid
   rollState.spinInterval = setInterval(() => {
     if (!rollState.current) return;
     rollState.current.sections.forEach(sec => {
       sec.dice.forEach(d => { if (d.spinning) d.spinValue = rollDie(d.die); });
     });
-    renderDiceRoller();
+    updateSpinDisplay();
   }, 80);
 
   // Steps: lock each die one by one, then reveal each section total
@@ -101,6 +102,20 @@ function startRoll(sectionDefs, label) {
   setTimeout(() => advance(0), 600); // spin all dice for 600ms before first lock-in
 }
 
+// Update only the text content of spinning dice — avoids full DOM rebuild during spin
+function updateSpinDisplay() {
+  const spinValEls = document.querySelectorAll('#dice-roller .result-die.spinning .result-die-val');
+  let elIdx = 0;
+  rollState.current?.sections.forEach(sec => {
+    sec.dice.forEach(d => {
+      if (d.spinning && spinValEls[elIdx]) {
+        spinValEls[elIdx].textContent = d.spinValue;
+        elIdx++;
+      }
+    });
+  });
+}
+
 function renderDiceRoller() {
   const el = document.getElementById('dice-roller');
   if (!el) return;
@@ -113,9 +128,11 @@ function renderDiceRoller() {
     return `
       <div class="die-control">
         <button class="die-adj-btn" data-action="die-dec" data-die="${d}" ${qty === 0 ? 'disabled' : ''}>&#8722;</button>
-        <div class="die-face d${d}">
-          <span class="die-face-label">d${d}</span>
-          ${qty > 0 ? `<span class="die-face-qty">${qty}</span>` : ''}
+        <div class="die-slot">
+          <div class="die-face d${d}">
+            <span class="die-face-label">d${d}</span>
+          </div>
+          <span class="die-face-qty">${qty > 0 ? qty : ''}</span>
         </div>
         <button class="die-adj-btn" data-action="die-inc" data-die="${d}">&#43;</button>
       </div>`;
@@ -132,7 +149,7 @@ function renderDiceRoller() {
       const diceChips = visibleDice.map(d => {
         const displayVal = d.spinning ? d.spinValue : d.value;
         const spinClass  = d.spinning ? ' spinning' : '';
-        return `<span class="result-die d${d.die}${spinClass}">${displayVal}</span>`;
+        return `<span class="result-die d${d.die}${spinClass}"><span class="result-die-val">${displayVal}</span></span>`;
       }).join('');
 
       const rawTotal = sec.dice.reduce((s, d) => s + d.value, 0) + sec.bonus;
@@ -157,7 +174,7 @@ function renderDiceRoller() {
       <div class="roll-results-area">
         <div class="roll-results-label">${escHtml(c.label)}</div>
         ${sectionsHtml}
-        ${canRollDamage ? `<button class="btn btn-primary btn-sm btn-roll-damage" data-action="roll-damage">&#9876; Roll Damage</button>` : ''}
+        ${canRollDamage ? `<button class="btn btn-primary btn-sm btn-roll-damage" data-action="roll-damage">${rollState.pendingDamage.isCrit ? '&#9876; Roll Critical Damage!' : '&#9876; Roll Damage'}</button>` : ''}
       </div>`;
   }
 
@@ -198,12 +215,12 @@ function onDiceRollerClick(e) {
   }
   if (action === 'roll-damage') {
     if (rollState.animating || !rollState.pendingDamage) return;
-    const { dmg, attackName } = rollState.pendingDamage;
+    const { dmg, attackName, isCrit } = rollState.pendingDamage;
     rollState.pendingDamage = null;
     const damageSection = dmg.die > 0
-      ? { label: 'Damage', dice: Array(dmg.count).fill(dmg.die), bonus: dmg.bonus }
+      ? { label: isCrit ? 'Damage (Critical!)' : 'Damage', dice: Array(dmg.count).fill(dmg.die), bonus: dmg.bonus }
       : { label: 'Damage', dice: [], bonus: dmg.bonus };
-    startRoll([damageSection], attackName + ' — Damage');
+    startRoll([damageSection], attackName + (isCrit ? ' — Critical Damage!' : ' — Damage'));
     return;
   }
   if (action === 'clear-roller') {
@@ -741,11 +758,22 @@ function onEncounterClick(e) {
   // Enemy attack roll — to-hit only; damage deferred to "Roll Damage" button
   const attackBtn = e.target.closest('[data-action="attack-roll"]');
   if (attackBtn) {
-    const hitBonus = parseHitBonus(attackBtn.dataset.roll);
-    const dmg      = parseDamage(attackBtn.dataset.damage);
+    const hitBonus   = parseHitBonus(attackBtn.dataset.roll);
+    const dmg        = parseDamage(attackBtn.dataset.damage);
     const attackName = attackBtn.dataset.attackName;
-    rollState.pendingDamage = dmg ? { dmg, attackName } : null;
-    startRoll([{ label: 'To-Hit (d10)', dice: [10], bonus: hitBonus }], attackName + ' — To Hit');
+    const toHitValue = rollDie(10);
+    const isFumble   = toHitValue === 1;
+    const isCrit     = toHitValue === 10;
+    if (!isFumble && dmg) {
+      const critDmg = isCrit && dmg.die > 0 ? { ...dmg, count: dmg.count * 2 } : dmg;
+      rollState.pendingDamage = { dmg: critDmg, attackName, isCrit };
+    } else {
+      rollState.pendingDamage = null;
+    }
+    const hitLabel = isFumble ? attackName + ' — MISS! (Auto-fail)'
+                   : isCrit   ? attackName + ' — CRITICAL HIT!'
+                              : attackName + ' — To Hit';
+    startRoll([{ label: 'To-Hit (d10)', dice: [10], bonus: hitBonus, preRolled: [toHitValue] }], hitLabel);
     document.getElementById('dice-roller')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     return;
   }

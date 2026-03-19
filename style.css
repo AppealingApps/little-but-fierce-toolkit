@@ -1012,6 +1012,13 @@ header .subtitle {
 .die-face.d12 { background: #6020a0; color: #f0e0ff; border-radius: 50%; }
 .die-face.d20 { background: #a01010; color: #ffe0e0; border-radius: 50%; }
 
+.die-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
 .die-face-label {
   font-size: 0.82rem;
   font-weight: bold;
@@ -1019,9 +1026,11 @@ header .subtitle {
 }
 
 .die-face-qty {
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: bold;
   line-height: 1;
+  min-height: 1em;
+  color: var(--brown);
 }
 
 /* Roll results */
@@ -1075,11 +1084,19 @@ header .subtitle {
   font-weight: bold;
   color: white;
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
-  animation: diceAppear 0.2s ease-out;
+  position: relative;
 }
-.result-die.d4  { background: #b8900e; border-radius: 0;
-                  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-                  justify-content: flex-end; padding-bottom: 6px; }
+/* d4: triangle drawn by ::before so the number text is never clipped */
+.result-die.d4  { background: transparent; border-radius: 0; color: #fff8e0; }
+.result-die.d4::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #b8900e;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+/* value label sits above the ::before pseudo-element */
+.result-die-val { position: relative; z-index: 1; }
 .result-die.d6  { background: #2560a8; }
 .result-die.d8  { background: #1e7a44; border-radius: 0;
                   clip-path: polygon(50% 4%, 96% 50%, 50% 96%, 4% 50%); }
@@ -1111,7 +1128,6 @@ header .subtitle {
   font-size: 1.1rem;
   font-weight: bold;
   box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-  animation: diceAppear 0.2s ease-out;
   padding: 0 0.3rem;
 }
 
