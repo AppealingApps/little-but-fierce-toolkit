@@ -15,6 +15,39 @@ const EFFECTS = [
   { id: 'on-fire',     label: 'On Fire',     color: '#c04010' },
 ];
 
+// ── Initiative UI state (transient, not persisted) ────────────────────
+const initiativeState = { addingHero: false };
+
+function renderInitiativeBar() {
+  const el = document.getElementById('initiative-bar');
+  if (!el) return;
+  if (!state.encounter) { el.innerHTML = ''; return; }
+  if (initiativeState.addingHero) {
+    el.innerHTML = `
+      <div class="init-add-form">
+        <input type="text" id="init-hero-name" placeholder="Hero name" maxlength="40" autocomplete="off">
+        <input type="number" id="init-hero-val" placeholder="Initiative" min="-9" max="29" style="width:80px">
+        <button class="btn btn-primary btn-sm" data-action="init-confirm-hero">Add</button>
+        <button class="btn btn-sm" data-action="init-cancel-hero">Cancel</button>
+      </div>`;
+    setTimeout(() => document.getElementById('init-hero-name')?.focus(), 0);
+  } else {
+    el.innerHTML = `<button class="btn btn-sm" data-action="init-add-hero-open">+ Add Hero to Initiative</button>`;
+  }
+}
+
+function renderInitiativeFooter() {
+  const el = document.getElementById('initiative-footer');
+  if (!el) return;
+  if (!state.encounter) { el.innerHTML = ''; return; }
+  const round = state.encounter.round || 1;
+  el.innerHTML = `
+    <div class="initiative-footer">
+      <span class="init-round-label">Round ${round}</span>
+      <button class="btn btn-sm btn-primary" data-action="init-reset-round">&#8635; Reset Initiative</button>
+    </div>`;
+}
+
 // ── Dice roller constants & state ────────────────────────────────────
 const DICE_SIDES = [4, 6, 8, 10, 12, 20];
 
@@ -273,6 +306,15 @@ function loadState() {
       const saved = JSON.parse(raw);
       // Merge carefully so missing keys fall back to defaults
       state = Object.assign(defaultState(), saved);
+      // Migrate old encounter state that predates initiative tracking
+      if (state.encounter) {
+        if (!state.encounter.heroes) state.encounter.heroes = [];
+        if (state.encounter.round == null) state.encounter.round = 1;
+        state.encounter.enemies.forEach(e => {
+          if (e.initiative == null) e.initiative = 0;
+          if (e.done == null) e.done = false;
+        });
+      }
     }
   } catch (e) {
     state = defaultState();
@@ -482,8 +524,19 @@ function renderEncounter() {
   document.getElementById('encounter-xp-summary').textContent =
     `${totalXP} XP total — defeat all enemies to earn it`;
 
+  // Sort enemies + heroes together by initiative descending
+  const heroes = state.encounter.heroes || [];
+  const allCombatants = [
+    ...state.encounter.enemies.map(e => ({ _type: 'enemy', _data: e })),
+    ...heroes.map(h => ({ _type: 'hero', _data: h }))
+  ].sort((a, b) => b._data.initiative - a._data.initiative);
+
   const container = document.getElementById('encounter-enemies');
-  container.innerHTML = state.encounter.enemies.map(inst => renderEnemyCard(inst)).join('');
+  container.innerHTML = allCombatants.map(c =>
+    c._type === 'enemy' ? renderEnemyCard(c._data) : renderHeroCard(c._data)
+  ).join('');
+
+  renderInitiativeFooter();
 
   const footerEl = document.getElementById('xp-earned-display');
   footerEl.innerHTML =
@@ -496,7 +549,7 @@ function renderEnemyCard(inst) {
   if (pct <= 30) fillClass += ' low';
   else if (pct <= 60) fillClass += ' medium';
 
-  const cardClass = inst.defeated ? 'enemy-card defeated' : 'enemy-card';
+  const cardClass = `enemy-card${inst.defeated ? ' defeated' : ''}${inst.done ? ' init-done' : ''}`;
   const btnClass  = inst.defeated ? 'btn-defeat is-defeated' : 'btn-defeat not-defeated';
   const btnLabel  = inst.defeated ? '&#10003; Defeated' : 'Mark Defeated';
   const disabled  = inst.defeated ? 'disabled' : '';
@@ -572,6 +625,14 @@ function renderEnemyCard(inst) {
         </div>
       </div>
 
+      <div class="init-row">
+        <span class="init-badge">Initiative: ${inst.initiative}</span>
+        <button class="btn btn-sm btn-init-done${inst.done ? ' is-done' : ''}"
+                data-action="init-toggle-done" data-inst="${inst.id}">
+          ${inst.done ? '&#10003; Done' : 'Mark Done'}
+        </button>
+      </div>
+
       ${inst.statsOpen ? statsHtml : ''}
 
       <div class="hp-bar-wrap">
@@ -609,6 +670,28 @@ function renderEnemyCard(inst) {
       </div>
     </div>
   `;
+}
+
+function renderHeroCard(hero) {
+  return `
+    <div class="enemy-card hero-init-card${hero.done ? ' init-done' : ''}">
+      <div class="enemy-card-header">
+        <div class="enemy-card-name-row">
+          <span class="enemy-card-name">&#9788; ${escHtml(hero.name)}</span>
+          <span class="tag">Hero</span>
+        </div>
+        <div class="enemy-card-actions">
+          <button class="btn btn-sm" data-action="init-remove-hero" data-hero-id="${escHtml(hero.id)}">Remove</button>
+        </div>
+      </div>
+      <div class="init-row">
+        <span class="init-badge">Initiative: ${hero.initiative}</span>
+        <button class="btn btn-sm btn-init-done${hero.done ? ' is-done' : ''}"
+                data-action="init-toggle-hero-done" data-hero-id="${escHtml(hero.id)}">
+          ${hero.done ? '&#10003; Done' : 'Mark Done'}
+        </button>
+      </div>
+    </div>`;
 }
 
 // ── DL filter population ───────────────────────────────────────────────
@@ -721,15 +804,18 @@ function onStartEncounter() {
         defeated: false,
         statsOpen: true,
         effects: [],
-        notes: ''
+        notes: '',
+        initiative: rollDie(10) + (enemy.spd || 0),
+        done: false
       });
     }
   });
 
-  state.encounter = { enemies, startedAt: Date.now() };
+  state.encounter = { enemies, heroes: [], round: 1, startedAt: Date.now() };
   saveState();
   showView('encounter');
   renderEncounter();
+  renderInitiativeBar();
   renderDiceRoller();
 }
 
@@ -755,7 +841,7 @@ function onEncounterClick(e) {
     return;
   }
 
-  // Enemy attack roll — to-hit only; damage deferred to "Roll Damage" button
+  // Enemy attack roll — fumble/crit auto-resolve; normal hit defers damage to "Roll Damage" button
   const attackBtn = e.target.closest('[data-action="attack-roll"]');
   if (attackBtn) {
     const hitBonus   = parseHitBonus(attackBtn.dataset.roll);
@@ -764,16 +850,20 @@ function onEncounterClick(e) {
     const toHitValue = rollDie(10);
     const isFumble   = toHitValue === 1;
     const isCrit     = toHitValue === 10;
-    if (!isFumble && dmg) {
-      const critDmg = isCrit && dmg.die > 0 ? { ...dmg, count: dmg.count * 2 } : dmg;
-      rollState.pendingDamage = { dmg: critDmg, attackName, isCrit };
-    } else {
-      rollState.pendingDamage = null;
-    }
+    rollState.pendingDamage = null;
     const hitLabel = isFumble ? attackName + ' — MISS! (Auto-fail)'
                    : isCrit   ? attackName + ' — CRITICAL HIT!'
                               : attackName + ' — To Hit';
-    startRoll([{ label: 'To-Hit (d10)', dice: [10], bonus: hitBonus, preRolled: [toHitValue] }], hitLabel);
+    const toHitSection = { label: 'To-Hit (d10)', dice: [10], bonus: isFumble || isCrit ? 0 : hitBonus, preRolled: [toHitValue] };
+    if (isCrit && dmg) {
+      // Roll crit damage immediately alongside the to-hit
+      const critDmg = dmg.die > 0 ? { ...dmg, count: dmg.count * 2 } : dmg;
+      const dmgDice = critDmg.die > 0 ? Array(critDmg.count).fill(critDmg.die) : [];
+      startRoll([toHitSection, { label: 'Damage (Critical!)', dice: dmgDice, bonus: critDmg.bonus }], hitLabel);
+    } else {
+      if (!isFumble && dmg) rollState.pendingDamage = { dmg, attackName, isCrit: false };
+      startRoll([toHitSection], hitLabel);
+    }
     document.getElementById('dice-roller')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     return;
   }
@@ -830,6 +920,75 @@ function onEncounterClick(e) {
     applyHpChange(instId, applyDmgBtn ? -val : val);
     input.value = '';
     return;
+  }
+
+  // Initiative: mark enemy done
+  const initDoneBtn = e.target.closest('[data-action="init-toggle-done"]');
+  if (initDoneBtn) {
+    const inst = state.encounter.enemies.find(en => en.id === initDoneBtn.dataset.inst);
+    if (inst) { inst.done = !inst.done; saveState(); renderEncounter(); }
+    return;
+  }
+
+  // Initiative: mark hero done
+  const heroDoneBtn = e.target.closest('[data-action="init-toggle-hero-done"]');
+  if (heroDoneBtn) {
+    const hero = (state.encounter.heroes || []).find(h => h.id === heroDoneBtn.dataset.heroId);
+    if (hero) { hero.done = !hero.done; saveState(); renderEncounter(); }
+    return;
+  }
+
+  // Initiative: remove hero
+  const removeHeroBtn = e.target.closest('[data-action="init-remove-hero"]');
+  if (removeHeroBtn) {
+    const heroes = state.encounter.heroes || [];
+    const idx = heroes.findIndex(h => h.id === removeHeroBtn.dataset.heroId);
+    if (idx !== -1) { heroes.splice(idx, 1); saveState(); renderEncounter(); }
+    return;
+  }
+}
+
+function onInitiativeBarClick(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn || !state.encounter) return;
+  const action = btn.dataset.action;
+
+  if (action === 'init-add-hero-open') {
+    initiativeState.addingHero = true;
+    renderInitiativeBar();
+    return;
+  }
+  if (action === 'init-cancel-hero') {
+    initiativeState.addingHero = false;
+    renderInitiativeBar();
+    return;
+  }
+  if (action === 'init-confirm-hero') {
+    const nameEl = document.getElementById('init-hero-name');
+    const valEl  = document.getElementById('init-hero-val');
+    const name = (nameEl?.value || '').trim();
+    const initiative = parseInt(valEl?.value, 10);
+    if (!name || isNaN(initiative)) return;
+    if (!state.encounter.heroes) state.encounter.heroes = [];
+    state.encounter.heroes.push({ id: 'hero-' + Date.now(), name, initiative, done: false });
+    state.encounter.heroes.sort((a, b) => b.initiative - a.initiative);
+    initiativeState.addingHero = false;
+    saveState();
+    renderInitiativeBar();
+    renderEncounter();
+    return;
+  }
+}
+
+function onInitiativeFooterClick(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn || !state.encounter) return;
+  if (btn.dataset.action === 'init-reset-round') {
+    state.encounter.enemies.forEach(en => { en.done = false; });
+    (state.encounter.heroes || []).forEach(h => { h.done = false; });
+    state.encounter.round = (state.encounter.round || 1) + 1;
+    saveState();
+    renderEncounter();
   }
 }
 
@@ -913,10 +1072,15 @@ function init() {
   // Dice roller
   document.getElementById('dice-roller').addEventListener('click', onDiceRollerClick);
 
+  // Initiative
+  document.getElementById('initiative-bar').addEventListener('click', onInitiativeBarClick);
+  document.getElementById('initiative-footer').addEventListener('click', onInitiativeFooterClick);
+
   // Restore correct view
   if (state.view === 'encounter' && state.encounter) {
     showView('encounter');
     renderEncounter();
+    renderInitiativeBar();
     renderDiceRoller();
   } else {
     state.view = 'builder';

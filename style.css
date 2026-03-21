@@ -1202,3 +1202,77 @@ header .subtitle {
   .hp-controls { gap: 0.3rem; }
   .hp-damage-input { margin-left: 0; }
 }
+
+/* ── Initiative Tracker ── */
+#initiative-bar { margin-bottom: 0.75rem; }
+
+.init-add-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.75rem;
+  background: var(--parchment-dark);
+  border: 1px solid var(--parchment-deep);
+  border-radius: var(--radius);
+}
+.init-add-form input[type="text"] { flex: 1; min-width: 100px; }
+.init-add-form input[type="number"] { width: 72px; }
+
+.init-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  margin-top: 0.4rem;
+  border-top: 1px solid var(--parchment-deep);
+}
+.init-badge {
+  flex: 1;
+  font-size: 0.8rem;
+  font-variant: small-caps;
+  color: var(--ink-light);
+  letter-spacing: 0.02em;
+}
+.btn-init-done {
+  font-size: 0.75rem;
+  min-width: 82px;
+}
+.btn-init-done.is-done {
+  background: var(--brown);
+  color: var(--parchment);
+  border-color: var(--brown);
+}
+
+/* Dimmed card when done for the round */
+.enemy-card.init-done {
+  opacity: 0.4;
+  transition: opacity 0.2s;
+}
+.enemy-card.init-done.defeated {
+  opacity: 0.3;
+}
+
+/* Hero initiative card */
+.hero-init-card {
+  background: color-mix(in srgb, var(--gold-light) 10%, var(--parchment));
+  border-color: var(--gold);
+}
+.hero-init-card .enemy-card-name { color: var(--brown-light); }
+
+/* Initiative footer */
+.initiative-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.25rem;
+  border-top: 1px solid var(--parchment-deep);
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+.init-round-label {
+  font-variant: small-caps;
+  color: var(--ink-light);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
