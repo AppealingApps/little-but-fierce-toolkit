@@ -1048,6 +1048,8 @@ function init() {
   // Party inputs
   document.getElementById('party-size').addEventListener('input', onPartyChange);
   document.getElementById('party-level').addEventListener('input', onPartyChange);
+  document.getElementById('party-size').addEventListener('focus', e => e.target.select());
+  document.getElementById('party-level').addEventListener('focus', e => e.target.select());
 
   // Search
   document.getElementById('search-input').addEventListener('input', onSearchInput);
