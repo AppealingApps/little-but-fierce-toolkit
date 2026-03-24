@@ -1276,3 +1276,137 @@ header .subtitle {
   font-size: 0.95rem;
   letter-spacing: 0.04em;
 }
+
+/* ── Custom Monster Panel ── */
+.custom-monster-panel { margin-bottom: 1rem; }
+
+.cmf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+.cmf-header h3 { margin: 0; }
+
+.custom-monster-form {
+  background: var(--parchment-deep);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.custom-monster-form h4 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: var(--brown);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cmf-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  align-items: flex-end;
+}
+.cmf-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--brown);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.cmf-input {
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  background: var(--parchment);
+  font-family: inherit;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+.cmf-input:focus { outline: 2px solid var(--gold-light); }
+.cmf-number { width: 4.5rem; }
+.cmf-stat   { width: 3.5rem; }
+
+.cmf-section {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--gold);
+  padding-top: 0.6rem;
+}
+.cmf-section-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brown);
+  margin-bottom: 0.4rem;
+}
+
+.cmf-attack-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.cmf-atk-name  { flex: 1; min-width: 90px; }
+
+.cmf-abilities {
+  display: block;
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem;
+  border: 1px solid var(--gold);
+  background: var(--parchment);
+  border-radius: 4px;
+  resize: vertical;
+  margin-top: 0.25rem;
+  color: var(--ink);
+}
+
+.cmf-xp-display {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--brown);
+}
+
+.cmf-form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--gold);
+  padding-top: 0.75rem;
+}
+
+/* Custom monster list */
+.custom-monster-list { display: flex; flex-direction: column; gap: 0.3rem; }
+
+.custom-monster-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--parchment-deep);
+}
+.custom-monster-row:last-child { border-bottom: none; }
+
+.custom-monster-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+/* Custom badge in search results */
+.tag-custom {
+  background: #4a3a7a;
+  color: #fff;
+  border-color: #4a3a7a;
+}

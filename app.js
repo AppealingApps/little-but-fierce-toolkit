@@ -287,7 +287,8 @@ const defaultState = () => ({
   party: { size: 4, level: 2 },
   roster: [],        // [{ enemyId, count }]
   encounter: null,   // null | { enemies: [{id, enemyId, name, maxHp, currentHp, defeated}] }
-  searchQty: {}      // { enemyId: qty }
+  searchQty: {},     // { enemyId: qty }
+  customMonsters: [] // persisted user-created monsters
 });
 
 let state = defaultState();
@@ -306,6 +307,8 @@ function loadState() {
       const saved = JSON.parse(raw);
       // Merge carefully so missing keys fall back to defaults
       state = Object.assign(defaultState(), saved);
+      // Migrate: ensure customMonsters always exists
+      if (!state.customMonsters) state.customMonsters = [];
       // Migrate old encounter state that predates initiative tracking
       if (state.encounter) {
         if (!state.encounter.heroes) state.encounter.heroes = [];
@@ -323,11 +326,12 @@ function loadState() {
 
 // ── Enemy lookup helpers ────────────────────────────────────────────────
 function enemyById(id) {
-  return ENEMIES.find(e => e.id === id);
+  return ENEMIES.find(e => e.id === id) || (state.customMonsters || []).find(e => e.id === id);
 }
 
 function allDLs() {
-  return [...new Set(ENEMIES.map(e => e.dl))].sort((a, b) => a - b);
+  const all = [...ENEMIES, ...(state.customMonsters || [])];
+  return [...new Set(all.map(e => e.dl))].sort((a, b) => a - b);
 }
 
 // ── Computed values ────────────────────────────────────────────────────
@@ -369,18 +373,12 @@ function encounterXPEarned() {
   if (!state.encounter) return 0;
   return state.encounter.enemies
     .filter(e => e.defeated)
-    .reduce((sum, e) => {
-      const enemy = enemyById(e.enemyId);
-      return sum + (enemy ? enemy.xp : 0);
-    }, 0);
+    .reduce((sum, e) => sum + (e.xp || 0), 0);
 }
 
 function encounterTotalXP() {
   if (!state.encounter) return 0;
-  return state.encounter.enemies.reduce((sum, e) => {
-    const enemy = enemyById(e.enemyId);
-    return sum + (enemy ? enemy.xp : 0);
-  }, 0);
+  return state.encounter.enemies.reduce((sum, e) => sum + (e.xp || 0), 0);
 }
 
 // ── View switching ─────────────────────────────────────────────────────
@@ -396,6 +394,7 @@ function renderBuilder() {
   renderParty();
   renderDifficultyPanel();
   renderSearchResults();
+  renderCustomMonsterPanel();
   renderRoster();
 }
 
@@ -435,7 +434,8 @@ function getFilteredEnemies() {
   const type   = document.getElementById('filter-type')?.value || '';
   const dlVal  = document.getElementById('filter-dl')?.value || '';
 
-  return ENEMIES.filter(e => {
+  const allEnemies = [...ENEMIES, ...(state.customMonsters || [])];
+  return allEnemies.filter(e => {
     if (query && !e.name.toLowerCase().includes(query)) return false;
     if (type && e.type !== type) return false;
     if (dlVal && String(e.dl) !== dlVal) return false;
@@ -456,10 +456,12 @@ function renderSearchResults() {
 
   container.innerHTML = results.map(e => {
     const qty = state.searchQty[e.id] || 1;
+    const customBadge = e.isCustom ? '<span class="tag tag-custom tag-sm">Custom</span>' : '';
     return `
       <div class="result-row">
         <span class="result-name">${escHtml(e.name)}</span>
         <div class="result-meta">
+          ${customBadge}
           <span class="tag tag-type-${escHtml(e.type)}">${escHtml(e.type)}</span>
           <span class="tag tag-dl">DL ${e.dl}</span>
           <span class="tag tag-xp">${e.xp} XP</span>
@@ -692,6 +694,282 @@ function renderHeroCard(hero) {
         </button>
       </div>
     </div>`;
+}
+
+// ── Custom Monster Panel ───────────────────────────────────────────────
+const customMonsterState = { open: false, editId: null, formData: null };
+
+function defaultFormData() {
+  return {
+    name: '', type: 'Animal', dl: 1, hp: 10,
+    str: 0, spd: 2, smt: 1, sml: 0,
+    move: '6', awareness: 7, defence: 10,
+    attacks: [{ name: '', range: 'Close', roll: '+0', damage: '1d6' }],
+    abilitiesText: ''
+  };
+}
+
+function readFormToState() {
+  if (!customMonsterState.open || !customMonsterState.formData) return;
+  const fd = customMonsterState.formData;
+  fd.name        = document.getElementById('cmf-name')?.value ?? fd.name;
+  fd.type        = document.getElementById('cmf-type')?.value ?? fd.type;
+  fd.dl          = parseInt(document.getElementById('cmf-dl')?.value, 10) || 0;
+  fd.hp          = parseInt(document.getElementById('cmf-hp')?.value, 10) || 1;
+  fd.str         = parseInt(document.getElementById('cmf-str')?.value, 10) || 0;
+  fd.spd         = parseInt(document.getElementById('cmf-spd')?.value, 10) || 0;
+  fd.smt         = parseInt(document.getElementById('cmf-smt')?.value, 10) || 0;
+  fd.sml         = parseInt(document.getElementById('cmf-sml')?.value, 10) || 0;
+  fd.move        = document.getElementById('cmf-move')?.value ?? fd.move;
+  fd.awareness   = parseInt(document.getElementById('cmf-awareness')?.value, 10) || 7;
+  fd.defence     = parseInt(document.getElementById('cmf-defence')?.value, 10) || 10;
+  fd.abilitiesText = document.getElementById('cmf-abilities')?.value ?? fd.abilitiesText;
+  fd.attacks = [];
+  document.querySelectorAll('.cmf-attack-row').forEach(row => {
+    fd.attacks.push({
+      name:   row.querySelector('.cmf-atk-name')?.value  || '',
+      range:  row.querySelector('.cmf-atk-range')?.value || 'Close',
+      roll:   row.querySelector('.cmf-atk-roll')?.value  || '+0',
+      damage: row.querySelector('.cmf-atk-damage')?.value || '1d6'
+    });
+  });
+}
+
+function renderCustomMonsterPanel() {
+  const el = document.getElementById('custom-monster-panel');
+  if (!el) return;
+
+  const customs = state.customMonsters || [];
+
+  const listHtml = customs.length === 0
+    ? '<p class="empty-msg">No custom monsters yet.</p>'
+    : customs.map(m => `
+        <div class="custom-monster-row">
+          <span class="result-name">${escHtml(m.name)}</span>
+          <div class="result-meta">
+            <span class="tag tag-type-${escHtml(m.type)} tag-sm">${escHtml(m.type)}</span>
+            <span class="tag tag-dl tag-sm">DL ${m.dl}</span>
+            <span class="tag tag-xp tag-sm">${m.xp} XP</span>
+            <span class="tag tag-hp tag-sm">HP: ${m.hp}</span>
+          </div>
+          <div class="custom-monster-actions">
+            <button class="btn btn-sm" data-cm-action="edit" data-cm-id="${escHtml(m.id)}">Edit</button>
+            <button class="btn btn-sm btn-danger" data-cm-action="delete" data-cm-id="${escHtml(m.id)}">Delete</button>
+          </div>
+        </div>`).join('');
+
+  let formHtml = '';
+  if (customMonsterState.open) {
+    const fd = customMonsterState.formData;
+    const xpValue = DL_TO_XP[fd.dl] ?? DL_TO_XP[0];
+    const attackRowsHtml = fd.attacks.map((atk, i) => `
+      <div class="cmf-attack-row">
+        <input type="text" class="cmf-atk-name cmf-input" placeholder="Attack name" value="${escHtml(atk.name)}">
+        <select class="cmf-atk-range cmf-input">
+          ${['Close', 'Thrown 12', 'Ranged 64', 'Ranged 120'].map(r =>
+            `<option${r === atk.range ? ' selected' : ''}>${escHtml(r)}</option>`).join('')}
+        </select>
+        <input type="text" class="cmf-atk-roll cmf-input" placeholder="+0" value="${escHtml(atk.roll)}" style="width:3.5rem">
+        <input type="text" class="cmf-atk-damage cmf-input" placeholder="1d6" value="${escHtml(atk.damage)}" style="width:4.5rem">
+        ${fd.attacks.length > 1
+          ? `<button type="button" class="btn btn-sm" data-cm-action="remove-attack" data-idx="${i}">&#10005;</button>`
+          : '<span style="width:2rem"></span>'}
+      </div>`).join('');
+
+    formHtml = `
+      <div class="custom-monster-form">
+        <h4>${customMonsterState.editId ? 'Edit Custom Monster' : 'New Custom Monster'}</h4>
+        <div class="cmf-row">
+          <label class="cmf-label">Name
+            <input type="text" id="cmf-name" class="cmf-input" placeholder="Monster name" value="${escHtml(fd.name)}" maxlength="60" style="min-width:12rem">
+          </label>
+          <label class="cmf-label">Type
+            <select id="cmf-type" class="cmf-input">
+              ${['Animal', 'Construct', 'Lost', 'Marvel', 'Person', 'Plant'].map(t =>
+                `<option${t === fd.type ? ' selected' : ''}>${t}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+        <div class="cmf-row">
+          <label class="cmf-label">DL
+            <input type="number" id="cmf-dl" class="cmf-input cmf-number" min="0" max="20" value="${fd.dl}">
+          </label>
+          <label class="cmf-label">XP&nbsp;<span class="cmf-xp-display">${xpValue}</span><small>&nbsp;(auto)</small></label>
+          <label class="cmf-label">HP
+            <input type="number" id="cmf-hp" class="cmf-input cmf-number" min="1" max="999" value="${fd.hp}">
+          </label>
+        </div>
+        <div class="cmf-row">
+          <label class="cmf-label">STR <input type="number" id="cmf-str" class="cmf-input cmf-stat" min="-5" max="10" value="${fd.str}"></label>
+          <label class="cmf-label">SPD <input type="number" id="cmf-spd" class="cmf-input cmf-stat" min="-5" max="10" value="${fd.spd}"></label>
+          <label class="cmf-label">SMT <input type="number" id="cmf-smt" class="cmf-input cmf-stat" min="-5" max="10" value="${fd.smt}"></label>
+          <label class="cmf-label">SML <input type="number" id="cmf-sml" class="cmf-input cmf-stat" min="-5" max="10" value="${fd.sml}"></label>
+        </div>
+        <div class="cmf-row">
+          <label class="cmf-label">Move
+            <input type="text" id="cmf-move" class="cmf-input" placeholder="6" value="${escHtml(fd.move)}" style="width:5rem">
+          </label>
+          <label class="cmf-label">Awareness
+            <input type="number" id="cmf-awareness" class="cmf-input cmf-number" min="1" max="20" value="${fd.awareness}">
+          </label>
+          <label class="cmf-label">Defence
+            <input type="number" id="cmf-defence" class="cmf-input cmf-number" min="1" max="20" value="${fd.defence}">
+          </label>
+        </div>
+        <div class="cmf-section">
+          <span class="cmf-section-label">Attacks</span>
+          <div id="cmf-attacks-list">${attackRowsHtml}</div>
+          <button type="button" class="btn btn-sm" data-cm-action="add-attack" style="margin-top:0.4rem">+ Add Attack</button>
+        </div>
+        <div class="cmf-section">
+          <label class="cmf-label" style="width:100%">Abilities <small>(one per line)</small>
+            <textarea id="cmf-abilities" class="cmf-abilities" rows="3"
+              placeholder="Darkvision&#10;Pack Attack">${escHtml(fd.abilitiesText)}</textarea>
+          </label>
+        </div>
+        <div class="cmf-form-actions">
+          <button type="button" class="btn btn-primary" data-cm-action="save">
+            ${customMonsterState.editId ? 'Update Monster' : 'Save Monster'}
+          </button>
+          <button type="button" class="btn" data-cm-action="cancel">Cancel</button>
+        </div>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="cmf-header">
+      <h3>Custom Monsters</h3>
+      ${!customMonsterState.open
+        ? '<button class="btn btn-sm btn-primary" data-cm-action="open-form">+ Create</button>'
+        : ''}
+    </div>
+    ${formHtml}
+    <div class="custom-monster-list">${listHtml}</div>`;
+}
+
+function openCustomMonsterForm(monster = null) {
+  customMonsterState.open = true;
+  customMonsterState.editId = monster ? monster.id : null;
+  customMonsterState.formData = monster ? {
+    name: monster.name,
+    type: monster.type,
+    dl: monster.dl,
+    hp: monster.hp,
+    str: monster.str,
+    spd: monster.spd,
+    smt: monster.smt,
+    sml: monster.sml,
+    move: monster.move,
+    awareness: monster.awareness,
+    defence: monster.defence,
+    attacks: monster.attacks.length > 0
+      ? monster.attacks.map(a => ({ ...a }))
+      : [{ name: '', range: 'Close', roll: '+0', damage: '1d6' }],
+    abilitiesText: (monster.abilities || []).join('\n')
+  } : defaultFormData();
+  renderCustomMonsterPanel();
+}
+
+function closeCustomMonsterForm() {
+  customMonsterState.open   = false;
+  customMonsterState.editId = null;
+  customMonsterState.formData = null;
+  renderCustomMonsterPanel();
+}
+
+function saveCustomMonster() {
+  readFormToState();
+  const fd = customMonsterState.formData;
+  if (!fd.name.trim()) {
+    alert('Monster name is required.');
+    document.getElementById('cmf-name')?.focus();
+    return;
+  }
+  const dl = Math.max(0, Math.min(20, fd.dl || 0));
+  const xp = DL_TO_XP[dl] ?? DL_TO_XP[0];
+  const monster = {
+    id: customMonsterState.editId || ('custom-' + Date.now()),
+    name: fd.name.trim(),
+    type: fd.type,
+    dl, xp,
+    hp:        Math.max(1, fd.hp || 1),
+    str: fd.str || 0,
+    spd: fd.spd || 0,
+    smt: fd.smt || 0,
+    sml: fd.sml || 0,
+    move:      fd.move.trim() || '6',
+    awareness: fd.awareness || 7,
+    defence:   fd.defence   || 10,
+    attacks:   fd.attacks.filter(a => a.name.trim()),
+    abilities: fd.abilitiesText.split('\n').map(s => s.trim()).filter(Boolean),
+    isCustom:  true
+  };
+  if (!state.customMonsters) state.customMonsters = [];
+  if (customMonsterState.editId) {
+    const idx = state.customMonsters.findIndex(m => m.id === customMonsterState.editId);
+    if (idx !== -1) state.customMonsters[idx] = monster;
+    else state.customMonsters.push(monster);
+  } else {
+    state.customMonsters.push(monster);
+  }
+  saveState();
+  closeCustomMonsterForm();
+  renderSearchResults();
+  populateDLFilter();
+}
+
+function deleteCustomMonster(id) {
+  if (!confirm('Delete this custom monster? It will also be removed from the roster.')) return;
+  state.customMonsters = (state.customMonsters || []).filter(m => m.id !== id);
+  state.roster = state.roster.filter(r => r.enemyId !== id);
+  saveState();
+  renderCustomMonsterPanel();
+  renderSearchResults();
+  renderRoster();
+  renderDifficultyPanel();
+  populateDLFilter();
+}
+
+function onCustomMonsterPanelClick(e) {
+  const btn = e.target.closest('[data-cm-action]');
+  if (!btn) return;
+  const action = btn.dataset.cmAction;
+  if (action === 'open-form') { openCustomMonsterForm(); return; }
+  if (action === 'cancel')    { closeCustomMonsterForm(); return; }
+  if (action === 'save')      { saveCustomMonster(); return; }
+  if (action === 'add-attack') {
+    readFormToState();
+    customMonsterState.formData.attacks.push({ name: '', range: 'Close', roll: '+0', damage: '1d6' });
+    renderCustomMonsterPanel();
+    return;
+  }
+  if (action === 'remove-attack') {
+    readFormToState();
+    const idx = parseInt(btn.dataset.idx, 10);
+    if (!isNaN(idx)) customMonsterState.formData.attacks.splice(idx, 1);
+    if (customMonsterState.formData.attacks.length === 0)
+      customMonsterState.formData.attacks.push({ name: '', range: 'Close', roll: '+0', damage: '1d6' });
+    renderCustomMonsterPanel();
+    return;
+  }
+  if (action === 'edit') {
+    const monster = (state.customMonsters || []).find(m => m.id === btn.dataset.cmId);
+    if (monster) openCustomMonsterForm(monster);
+    return;
+  }
+  if (action === 'delete') {
+    deleteCustomMonster(btn.dataset.cmId);
+    return;
+  }
+}
+
+function onCustomMonsterPanelInput(e) {
+  if (e.target.id === 'cmf-dl') {
+    const dl = parseInt(e.target.value, 10) || 0;
+    const xp = DL_TO_XP[dl] ?? DL_TO_XP[0];
+    const xpEl = document.querySelector('.cmf-xp-display');
+    if (xpEl) xpEl.textContent = xp;
+  }
 }
 
 // ── DL filter population ───────────────────────────────────────────────
@@ -1077,6 +1355,10 @@ function init() {
   // Initiative
   document.getElementById('initiative-bar').addEventListener('click', onInitiativeBarClick);
   document.getElementById('initiative-footer').addEventListener('click', onInitiativeFooterClick);
+
+  // Custom monster panel
+  document.getElementById('custom-monster-panel').addEventListener('click', onCustomMonsterPanelClick);
+  document.getElementById('custom-monster-panel').addEventListener('input', onCustomMonsterPanelInput);
 
   // Restore correct view
   if (state.view === 'encounter' && state.encounter) {
