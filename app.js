@@ -316,8 +316,12 @@ function loadState() {
         state.encounter.enemies.forEach(e => {
           if (e.initiative == null) e.initiative = 0;
           if (e.done == null) e.done = false;
+          if (e.ally == null) e.ally = false;
         });
       }
+      state.roster.forEach(r => {
+        if (r.ally == null) r.ally = false;
+      });
     }
   } catch (e) {
     state = defaultState();
@@ -342,7 +346,8 @@ function totalPartyLevel() {
 function rosterTotalXP() {
   return state.roster.reduce((sum, row) => {
     const e = enemyById(row.enemyId);
-    return sum + (e ? e.xp * row.count : 0);
+    if (!e) return sum;
+    return row.ally ? sum - e.xp * row.count : sum + e.xp * row.count;
   }, 0);
 }
 
@@ -372,13 +377,15 @@ function currentDifficultyLabel() {
 function encounterXPEarned() {
   if (!state.encounter) return 0;
   return state.encounter.enemies
-    .filter(e => e.defeated)
+    .filter(e => e.defeated && !e.ally)
     .reduce((sum, e) => sum + (e.xp || 0), 0);
 }
 
 function encounterTotalXP() {
   if (!state.encounter) return 0;
-  return state.encounter.enemies.reduce((sum, e) => sum + (e.xp || 0), 0);
+  return state.encounter.enemies
+    .filter(e => !e.ally)
+    .reduce((sum, e) => sum + (e.xp || 0), 0);
 }
 
 // ── View switching ─────────────────────────────────────────────────────
@@ -493,14 +500,21 @@ function renderRoster() {
   listEl.innerHTML = state.roster.map((row, i) => {
     const e = enemyById(row.enemyId);
     if (!e) return '';
-    const rowXp = e.xp * row.count;
+    const isAlly  = row.ally === true;
+    const rowXp   = e.xp * row.count;
+    const xpLabel = isAlly ? `&#8722;${rowXp} XP` : `${rowXp} XP`;
+    const allyBadge = isAlly ? '<span class="tag tag-ally tag-sm">Ally</span>' : '';
     return `
-      <div class="roster-row">
+      <div class="roster-row${isAlly ? ' is-ally' : ''}">
         <span class="roster-count">${row.count}&times;</span>
         <span class="roster-name">${escHtml(e.name)}</span>
+        ${allyBadge}
         <span class="tag tag-type-${escHtml(e.type)} tag-sm">${escHtml(e.type)}</span>
         <span class="tag tag-dl tag-sm">DL ${e.dl}</span>
-        <span class="roster-xp">${rowXp} XP</span>
+        <span class="roster-xp${isAlly ? ' is-ally' : ''}">${xpLabel}</span>
+        <button class="btn-toggle-ally${isAlly ? ' is-ally' : ''}" data-roster-idx="${i}" data-action="toggle-ally">
+          ${isAlly ? '&#9786; Ally' : 'Mark Ally'}
+        </button>
         <button class="btn-remove" data-roster-idx="${i}">&#10005;</button>
       </div>
     `;
@@ -518,13 +532,16 @@ function renderRoster() {
 function renderEncounter() {
   if (!state.encounter) return;
 
-  const totalXP  = encounterTotalXP();
-  const earnedXP = encounterXPEarned();
-  const defeated = state.encounter.enemies.filter(e => e.defeated).length;
-  const total    = state.encounter.enemies.length;
+  const totalXP    = encounterTotalXP();
+  const earnedXP   = encounterXPEarned();
+  const enemies    = state.encounter.enemies.filter(e => !e.ally);
+  const defeated   = enemies.filter(e => e.defeated).length;
+  const total      = enemies.length;
+  const allyCount  = state.encounter.enemies.filter(e => e.ally).length;
+  const allyNote   = allyCount > 0 ? ` · ${allyCount} ally` : '';
 
   document.getElementById('encounter-xp-summary').textContent =
-    `${totalXP} XP total — defeat all enemies to earn it`;
+    `${totalXP} XP total — defeat all enemies to earn it${allyNote}`;
 
   // Sort enemies + heroes together by initiative descending
   const heroes = state.encounter.heroes || [];
@@ -551,7 +568,7 @@ function renderEnemyCard(inst) {
   if (pct <= 30) fillClass += ' low';
   else if (pct <= 60) fillClass += ' medium';
 
-  const cardClass = `enemy-card${inst.defeated ? ' defeated' : ''}${inst.done ? ' init-done' : ''}`;
+  const cardClass = `enemy-card${inst.defeated ? ' defeated' : ''}${inst.done ? ' init-done' : ''}${inst.ally ? ' is-ally' : ''}`;
   const btnClass  = inst.defeated ? 'btn-defeat is-defeated' : 'btn-defeat not-defeated';
   const btnLabel  = inst.defeated ? '&#10003; Defeated' : 'Mark Defeated';
   const disabled  = inst.defeated ? 'disabled' : '';
@@ -614,9 +631,10 @@ function renderEnemyCard(inst) {
       <div class="enemy-card-header">
         <div class="enemy-card-name-row">
           <span class="enemy-card-name">${escHtml(inst.name)}</span>
+          ${inst.ally ? '<span class="tag tag-ally">Ally</span>' : ''}
           <span class="tag tag-type-${escHtml(inst.type)}">${escHtml(inst.type)}</span>
           <span class="tag tag-dl">DL ${inst.dl}</span>
-          <span class="tag tag-xp">${inst.xp} XP</span>
+          ${!inst.ally ? `<span class="tag tag-xp">${inst.xp} XP</span>` : ''}
         </div>
         <div class="enemy-card-actions">
           <button class="${btnClass}" data-inst="${inst.id}" data-action="toggle-defeat">
@@ -1038,7 +1056,7 @@ function addToRoster(enemyId, qty) {
   if (existing) {
     existing.count += qty;
   } else {
-    state.roster.push({ enemyId, count: qty });
+    state.roster.push({ enemyId, count: qty, ally: false });
   }
   saveState();
   renderRoster();
@@ -1046,6 +1064,18 @@ function addToRoster(enemyId, qty) {
 }
 
 function onRosterClick(e) {
+  const allyBtn = e.target.closest('[data-action="toggle-ally"]');
+  if (allyBtn) {
+    const idx = parseInt(allyBtn.dataset.rosterIdx, 10);
+    if (!isNaN(idx)) {
+      state.roster[idx].ally = !state.roster[idx].ally;
+      saveState();
+      renderRoster();
+      renderDifficultyPanel();
+    }
+    return;
+  }
+
   const btn = e.target.closest('.btn-remove');
   if (!btn) return;
   const idx = parseInt(btn.dataset.rosterIdx, 10);
@@ -1084,7 +1114,8 @@ function onStartEncounter() {
         effects: [],
         notes: '',
         initiative: rollDie(10) + (enemy.spd || 0),
-        done: false
+        done: false,
+        ally: row.ally === true
       });
     }
   });

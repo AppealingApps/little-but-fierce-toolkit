@@ -1410,3 +1410,53 @@ header .subtitle {
   color: #fff;
   border-color: #4a3a7a;
 }
+
+/* ── Ally styles ── */
+.tag-ally {
+  background: #d4edda;
+  border-color: #5a8a5a;
+  color: #1a5a1a;
+  font-weight: bold;
+}
+
+.roster-row.is-ally {
+  background: #f0faf0;
+}
+
+.roster-xp.is-ally {
+  background: #d4edda;
+  border-color: #5a8a5a;
+  color: #1a5a1a;
+}
+
+.btn-toggle-ally {
+  padding: 0.15rem 0.55rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  border: 1px solid var(--parchment-deep);
+  border-radius: 20px;
+  background: var(--parchment-dark);
+  color: var(--ink-light);
+  cursor: pointer;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.btn-toggle-ally:hover {
+  background: #d4edda;
+  border-color: #5a8a5a;
+  color: #1a5a1a;
+}
+
+.btn-toggle-ally.is-ally {
+  background: #d4edda;
+  border-color: #5a8a5a;
+  color: #1a5a1a;
+}
+
+.enemy-card.is-ally {
+  background: color-mix(in srgb, #a8d8a8 10%, var(--parchment));
+  border-color: #6a9a6a;
+}
